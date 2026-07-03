@@ -6,9 +6,9 @@ callbacks that the host invokes as stubs — no hand-rolled IPC channels or id c
 
 **Status:** feature-complete (pending a final manual gate) — transport + trust + sessions, the
 capability + types registries, and pane controls as the first consumer. Shipped capabilities:
-`ping`, `notify`, `paneControls.register`. See `docs/STATUS.md` for the phase history. Full
-architecture and the decision record live in the `www-tranquil` dev docs:
-`docs/development/guest-host-rpc` and `docs/drafts/adr/0009-capnweb-rpc`.
+`ping`, `notify`, `paneControls.register`. Phase history / handoff, full architecture, and the
+decision record live in the `www-tranquil` dev docs: `docs/development/tranquil-rpc-status`,
+`docs/development/guest-host-rpc`, and `docs/drafts/adr/0009-capnweb-rpc`.
 
 ## Trust model
 
