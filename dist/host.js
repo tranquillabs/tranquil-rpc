@@ -30,6 +30,7 @@ var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: tru
 // lib/index.js
 var lib_exports = {};
 __export(lib_exports, {
+  RpcTarget: () => RpcTarget,
   activate: () => activate,
   addTrustedRoot: () => addTrustedRoot,
   deactivate: () => deactivate,
@@ -2850,6 +2851,10 @@ function manage(webview, item) {
       current.transport.abort(reason);
     } catch (e) {
     }
+    try {
+      current.subscriptions.dispose();
+    } catch (e) {
+    }
     current = null;
   };
   const onLoad = () => {
@@ -2866,8 +2871,12 @@ function manage(webview, item) {
       return;
     }
     const transport = hostTransport(webview);
-    const session = new RpcSession(transport, buildHostApi({ item, webview, url }));
-    current = { transport, session };
+    const subscriptions2 = new import_atom.CompositeDisposable();
+    const session = new RpcSession(
+      transport,
+      buildHostApi({ item, webview, url, subscriptions: subscriptions2 })
+    );
+    current = { transport, session, subscriptions: subscriptions2 };
     webview.executeJavaScript(guestBundle()).then(() => console.log(TAG, "trusted session opened + guest injected:", url)).catch((e) => console.error(TAG, "guest injection failed:", e));
   };
   webview.addEventListener("dom-ready", onLoad);
@@ -2932,10 +2941,11 @@ function deactivate() {
 
 // lib/index.js
 function provideRpc() {
-  return { registerCapability, addTrustedRoot, isTrusted };
+  return { registerCapability, addTrustedRoot, isTrusted, RpcTarget };
 }
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {
+  RpcTarget,
   activate,
   addTrustedRoot,
   deactivate,

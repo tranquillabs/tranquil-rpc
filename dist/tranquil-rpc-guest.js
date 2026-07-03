@@ -2696,6 +2696,5 @@ var tranquilRpcGuest = (() => {
     window.tranquilHost = session.getRemoteMain();
     window.dispatchEvent(new Event("tranquilhost:ready"));
     console.log("[tranquil-rpc] connected; window.tranquilHost ready");
-    Promise.resolve(window.tranquilHost.ping()).then((r) => console.log("[tranquil-rpc] ping ->", r)).catch((e) => console.error("[tranquil-rpc] ping failed:", e));
   })();
 })();

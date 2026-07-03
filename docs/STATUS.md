@@ -5,7 +5,51 @@ Living handoff doc. Update at the **end of each phase, before handing off**. Pla
 
 ---
 
-## Current phase: **Phase 1 — real package** (transport + trust + sessions) — ✅ GATE PASSED (2026-07-02) → ready for Phase 2
+## Current phase: **Phase 2 — pane controls capability + cutover** — ✅ GATE PASSED (2026-07-02) → ready for Phase 3
+
+**Phase 2 gate result:** both trusted mockups self-register their own ⟳ ⤒ ⓘ controls over RPC on
+`tranquilhost:ready` (not the placeholder mimics); ⟳ reloads + re-registers with no duplicate
+buttons, ⤒ scrolls the inner container in-page, ⓘ → host toast via the `notify` capability. Actions
+run in the page (function stubs). Untrusted remote pages show only the host-defined ⟳ reload and have
+`window.tranquilHost === undefined`. Close/reload is clean. The old hardcoded `registerMockupControls`
++ `SCROLL_TOP_JS` path is fully removed.
+
+### What was built (Phase 2)
+- **`tranquil-rpc/lib/host.js`** — each session now carries a per-session `CompositeDisposable` in the
+  capability ctx (`{ item, webview, url, subscriptions }`), disposed on teardown (reload/close). This
+  is the hook that tears down page-registered pane controls so reloads don't accumulate them.
+- **`tranquil-rpc/lib/index.js`** — now re-exports `RpcTarget` (from capnweb) + adds it to `provideRpc`.
+  **Required for correctness:** capnweb detects capabilities with `instanceof RpcTarget`, and `capnweb`
+  isn't resolvable from consumer repos — a consumer's capability subclass MUST extend the exact
+  `RpcTarget` bundled into `dist/host.js`, so consumers get it from `require("tranquil-rpc")`.
+- **`tranquil-rpc/lib/guest.js`** — dropped the Phase-1 `ping()` self-check (still sets
+  `window.tranquilHost` + fires `tranquilhost:ready`). Rebuilt both `dist/` bundles.
+- **`tranquil-automations/lib/pane-controls-capability.js`** (new) — `PaneControlsCap` (RpcTarget;
+  `register(items)` matches only `ctx.item`, **`.dup()`s each action stub** to retain it past the call
+  and disposes the dups on teardown, invokes stubs so actions run in-page) + the `notify` capability as
+  a **bare function** so the guest calls `window.tranquilHost.notify(msg)` directly.
+  `registerDefaultRemoteControls(rpc)` host-registers ⟳ reload for untrusted browser pages
+  (`hasWebview(item) && !rpc.isTrusted(url)`).
+- **`tranquil-automations/lib/tranquil-automations.js`** — registers the caps + default remote controls
+  in the `showBusinessMockups` block; removed the `registerMockupControls` call/import.
+- **`tranquil-automations/lib/mockups.js`** — deleted `SCROLL_TOP_JS` + `registerMockupControls`.
+- **`tranquil-automations/lib/notify.js`** — toast helper; committed (was untracked, and
+  `tranquil-automations.js` already required it → latent missing-require crash on fresh checkout).
+- **`tranquil-automations/mockups/{main-view,properties}.html`** — self-register ⟳ ⤒ ⓘ on
+  `tranquilhost:ready`.
+
+### Two bugs found + fixed at the gate (capnweb lifetime/shape lessons)
+- **Argument stubs are disposed when the call returns.** First click gave `RpcImportHook was already
+  disposed`. Fix: `PaneControlsCap.register` `.dup()`s each action stub and holds the dup for the
+  control's lifetime (disposed with the session). Retain any stub you keep past a call.
+- **Capability shape = factory return type.** `notify` first returned a `NotifyCap` RpcTarget, so
+  `host.notify(msg)` threw `'notify' is not a function` (it was a namespace → would need
+  `host.notify.notify(msg)`). Fix: the `notify` factory returns a **bare function**. Rule: bare function
+  → `host.name(...)`; RpcTarget → `host.name.method(...)` (like `paneControls`).
+- Kept a permanent host-side diagnostic in `PaneControlsCap` (`pane control stub failed: <id> <err>`)
+  instead of silently swallowing action-stub rejections — that log is what surfaced both bugs.
+
+## Phase 1 gate (historical) — ✅ PASSED (2026-07-02)
 
 **Gate result:** all four checks green in-app. Startup logged `trusted roots: [ …/mockups ]` and
 `trusted session opened + guest injected` for both mockups. Trusted mockup webview console showed
@@ -113,10 +157,17 @@ Diagnostics:
   console `guest injection failed` line) or transport wiring.
 - A mockup shows `untrusted` → its URL isn't under the registered root (check the logged URL vs root).
 
-## Next phase entry point — **Phase 2** (pane controls capability + cutover)
-Add `PaneControlsCap` + `NotifyCap` (host `RpcTarget`s) in tranquil-automations
-(`lib/pane-controls-capability.js`); `registerCapability("paneControls", …)` + `("notify", …)` (via
-service or require — decide, note the timing). Convert both mockups to self-register (⟳ reload / ⤒
-scroll-top / ⓘ about → `notify`) on `tranquilhost:ready`. **Remove** `registerMockupControls()` +
-`SCROLL_TOP_JS` from `mockups.js`. Add host-side default controls for remote/untrusted browser pages.
-`pane-controls.js` itself stays unchanged. Then Phase 2's gate (see plan).
+## Next phase entry point — **Phase 3** (types registry + docs + ADR + security doc)
+Now that the capability surface is proven and stable, document + type it (no runtime code changes):
+- **`tranquil-rpc/types/host-api.d.ts`** — the capability catalog: `HostApi` with `ping()`,
+  `notify(msg)`, and `paneControls.register(items)`; plus the item/`PaneControlItem` shape (`id`,
+  `glyph`, `title`, `action`). Match the **shipped** surface exactly (bare-function vs namespace).
+- **`www-tranquil` dev docs** — new `docs/development/guest-host-rpc/+page.svx` (architecture,
+  transport, trust model, capability + types registry, host/guest API, the two capnweb gotchas above);
+  update `docs/development/pane-controls/+page.svx` to point at the RPC path.
+- **ADR** — via `/create-adr` in `www-tranquil/.../drafts/adr/NNNN-capnweb-rpc/+page.svx` (Nygard;
+  number after existing 0001/0002…): decision, options (plain IPC vs Cap'n Web), trust model,
+  consequences (build step, new dep).
+- **`tranquil-rpc/docs/SECURITY.md`** — seed from the plan's Security section (with footnotes); living doc.
+Gate: docs render, ADR numbered right, `.d.ts` matches the shipped surface, SECURITY.md carries the
+seeded content. See the plan for the full Phase 3 spec.
