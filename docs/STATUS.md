@@ -5,7 +5,51 @@ Living handoff doc. Update at the **end of each phase, before handing off**. Pla
 
 ---
 
-## Current phase: **Phase 2 — pane controls capability + cutover** — ✅ GATE PASSED (2026-07-02) → ready for Phase 3
+## Current phase: **Phase 3 — types registry + docs + ADR + security doc** — ⏳ built, awaiting manual gate (2026-07-02)
+
+Docs/types only — **no runtime code changed**. Built:
+- **`tranquil-rpc/types/host-api.d.ts`** — the guest-facing capability catalog (`window.tranquilHost`):
+  `HostApi` with `ping(): Promise<"pong">`, `notify(msg): Promise<true>`, and
+  `paneControls.register(items): Promise<true>`; `PaneControlItem` = `{ id, glyph, title, action }`
+  with `PaneControlAction = () => void | Promise<void>`; global `Window.tranquilHost?` +
+  `tranquilhost:ready` event augmentations. Shapes match the shipped surface (bare-fn vs namespace).
+- **`tranquil-rpc/types/tranquil-rpc.d.ts`** — the consumer/module API (`require("tranquil-rpc")`):
+  `registerCapability`, `addTrustedRoot`, `isTrusted`, re-exported `RpcTarget`, `activate`/`deactivate`,
+  `provideRpc`, `CapabilityContext` (`{ item, webview, url, subscriptions }`), `CapabilityFactory`.
+  `/// <reference>`s host-api.d.ts. `package.json` now has `"types": "./types/tranquil-rpc.d.ts"`.
+  **Both type-check clean** (`tsc --strict --skipLibCheck --types capnweb`, exit 0) against capnweb's
+  real `dist/index.d.ts`.
+- **`tranquil-rpc/docs/SECURITY.md`** — living security tracker, seeded from the plan's Security
+  section with all three footnotes (VS Code/Bierner, Electron guidance, Cap'n Web), each item tagged
+  `[done]`/`[partial]`/`[open]` + an open-issues priority summary.
+- **`www-tranquil` dev doc** `docs/development/guest-host-rpc/+page.svx` (new) — architecture,
+  transport, trust model, capability + types registry, host/guest API, the two capnweb gotchas, build.
+  Updated `docs/development/pane-controls/+page.svx` to point at the RPC path (mockups self-register;
+  hardcoded path removed). Both added to the nav list in `src/lib/data/docs.ts`.
+- **ADR** `www-tranquil/.../drafts/adr/0009-capnweb-rpc/+page.svx` (new; numbered after 0008) — Nygard,
+  matches the repo's shipped `.svx` ADR format (title/description frontmatter + `**Status:** Active ·
+  **Date:**` line), NOT the /create-adr skill's raw `type: ADR` template (that format doesn't render
+  on the site). Decision, options (Cap'n Web vs more IPC vs bespoke), trust model, consequences.
+  Added to `docs.ts` nav.
+
+**Automated checks done (what I could run without the app):** `tsc` on both `.d.ts` = exit 0;
+`vite build` in www-tranquil = exit 0 with `guest-host-rpc`, `pane-controls`, and `0009-capnweb-rpc`
+all compiling. One pre-existing prerender warning (`pane-controls#registration-api` anchor) — that
+self-link + heading predate this phase; not introduced here.
+
+### ▶ MANUAL GATE (Phase 3) — please run
+Docs/types only, so the gate is a read-through, not an app restart:
+1. `cd ../www-tranquil && npm run dev`, open **Development → Guest↔Host RPC** and **ADR-0009** in the
+   docs nav — both render; the pane-controls page shows the new RPC callout. (ADRs live under
+   `drafts/`, which is `prerender=false` = dev-only, same as 0001–0008.)
+2. Skim `tranquil-rpc/types/host-api.d.ts` against the running app's `window.tranquilHost` — the three
+   capabilities + `PaneControlItem` shape match what a trusted mockup actually calls.
+3. Skim `tranquil-rpc/docs/SECURITY.md` — seeded content + the three footnote sources are present.
+**PASS** = docs render, ADR numbered/readable, `.d.ts` matches the shipped surface, SECURITY.md carries
+the seeded content. This is the last phase — on PASS, the feature is complete; run the **Final
+end-to-end regression** in the plan, then STATUS.md can be trimmed (dev doc + ADR are the durable record).
+
+## Phase 2 — pane controls capability + cutover — ✅ GATE PASSED (2026-07-02)
 
 **Phase 2 gate result:** both trusted mockups self-register their own ⟳ ⤒ ⓘ controls over RPC on
 `tranquilhost:ready` (not the placeholder mimics); ⟳ reloads + re-registers with no duplicate
@@ -157,8 +201,8 @@ Diagnostics:
   console `guest injection failed` line) or transport wiring.
 - A mockup shows `untrusted` → its URL isn't under the registered root (check the logged URL vs root).
 
-## Next phase entry point — **Phase 3** (types registry + docs + ADR + security doc)
-Now that the capability surface is proven and stable, document + type it (no runtime code changes):
+## Phase 3 spec (delivered 2026-07-02 — see the top of this file for what was built)
+The original entry-point spec, kept for reference. All items below are done:
 - **`tranquil-rpc/types/host-api.d.ts`** — the capability catalog: `HostApi` with `ping()`,
   `notify(msg)`, and `paneControls.register(items)`; plus the item/`PaneControlItem` shape (`id`,
   `glyph`, `title`, `action`). Match the **shipped** surface exactly (bare-function vs namespace).

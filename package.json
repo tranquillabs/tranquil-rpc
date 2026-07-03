@@ -1,6 +1,7 @@
 {
   "name": "tranquil-rpc",
   "main": "./dist/host.js",
+  "types": "./types/tranquil-rpc.d.ts",
   "version": "0.0.0",
   "description": "Object-capability RPC (Cap'n Web) between the host renderer and browser webview guests",
   "repository": "https://github.com/tranquillabs/tranquil-rpc",
