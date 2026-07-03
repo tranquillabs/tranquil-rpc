@@ -54,4 +54,6 @@ live in `types/` (`tranquil-rpc.d.ts` + `host-api.d.ts`); `package.json` `"types
   `webview.send` / `ipcRenderer.sendToHost` channel `"tranquil:rpc"`.
 - `types/host-api.d.ts` — guest-facing capability catalog (`window.tranquilHost`).
 - `types/tranquil-rpc.d.ts` — consumer/module API (`require("tranquil-rpc")`).
-- `docs/SECURITY.md` — living security tracker (threat model, mitigations, open issues).
+
+The living security tracker (threat model, mitigations, open issues) lives in the `www-tranquil` dev
+docs at `docs/development/security-considerations`.
