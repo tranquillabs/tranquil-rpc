@@ -12,7 +12,7 @@ const banner = {
 };
 
 await esbuild.build({
-  entryPoints: ["lib/host.js"],
+  entryPoints: ["lib/index.js"],
   bundle: true,
   platform: "node",
   format: "cjs",

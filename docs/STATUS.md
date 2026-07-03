@@ -5,117 +5,118 @@ Living handoff doc. Update at the **end of each phase, before handing off**. Pla
 
 ---
 
-## Current phase: **Phase 0 — Spike ✅ PASSED** (2026-07-02) → ready for Phase 1
+## Current phase: **Phase 1 — real package** (transport + trust + sessions) — ✅ GATE PASSED (2026-07-02) → ready for Phase 2
 
-**Run 2 result:** full bidirectional round-trip confirmed for BOTH mockups
-(`properties.html` + `main-view.html`), no errors:
-`guest connected` → `host.ping() invoked` → `✅ callback stub ran IN PAGE` →
-`✅ host→guest callback completed` → `✅ host.ping() resolved -> pong`.
-Cap'n Web over the webview `sendToHost`/`ipc-message` transport is validated end-to-end
-(guest→host method calls, host→guest callback stubs running in the page, return values).
+**Gate result:** all four checks green in-app. Startup logged `trusted roots: [ …/mockups ]` and
+`trusted session opened + guest injected` for both mockups. Trusted mockup webview console showed
+`connected; window.tranquilHost ready` + `ping -> pong` (and `await window.tranquilHost.ping()` →
+`"pong"`). Remote pages (`https://example.com/`, `https://cal.com/`) logged
+`untrusted — no runtime injected` host-side and had `window.tranquilHost === undefined` in-page.
+Closing a mockup tab produced no console errors (clean session dispose). Trust boundary behaves
+exactly per the spec table (trusted file:// vs untrusted http(s)://).
 
-**Goal:** prove Cap'n Web works over the webview `sendToHost`/`ipc-message` transport — a
-guest→host method call resolves, and a page-supplied callback passed as an arg fires host→guest
-and runs *in the page*.
+**Goal:** the real `tranquil-rpc` package. Trust-gated host lifecycle that injects the guest runtime
++ opens a Cap'n Web session **only for trusted** webviews, exposing `window.tranquilHost` with a
+single trivial `ping` capability. No pane controls yet (Phase 2).
 
-### What was built
-- New sibling package `tranquil-rpc/` (git-init'd, not committed — awaiting your say-so).
-- `capnweb@0.9.0` + `esbuild` installed. Confirmed real API: `new RpcSession(transport, localMain?)`,
-  `session.getRemoteMain()`, `RpcTarget` base class, `RpcTransport = { send(string), receive():Promise<string>, abort? }`.
-- Transport over channel `"tranquil:rpc"`: `lib/transport-host.js` (webview `ipc-message` ⇄ `webview.send`)
-  and `lib/transport-guest.js` (`window.electron.receive` ⇄ `window.electron.sendToHost`).
-- `lib/host.js` — dev-package main (`activate`): observes file:// webview pane items, opens a
-  Cap'n Web session with a `SpikeHostApi { ping(cb) }`, injects the guest bundle on `did-stop-loading`.
-- `lib/guest.js` — injected into the page; opens the session, sets `window.tranquilHost`, fires
-  `tranquilhost:ready`, and self-tests `host.ping(cb)`.
-- `build.mjs` (esbuild) → `dist/host.cjs` (CJS, atom/electron external) + `dist/tranquil-rpc-guest.js`
-  (IIFE). Both carry a `Promise.withResolvers` polyfill banner.
-- Loaded as a **bundled package**: added to `tranquil-client/package.json` `dependencies` +
-  `packageDependencies` (`"tranquil-rpc": "link:../tranquil-rpc"`) and a `node_modules/tranquil-rpc`
-  symlink. Also symlinked into `~/.tranquil/dev/packages/` (dev-mode path).
+### What was built (this session)
+- **`lib/trust.js`** — `addTrustedRoot(dirOrFileUrl)` + `isTrusted(url)`, **default-deny**. Resolves
+  the URL to an fs path (`fileURLToPath`, query/hash stripped); trusts only `file://` at or under a
+  registered root (`===` or `startsWith(root + path.sep)` — no bare-prefix footgun, so `…/mockups`
+  never matches `…/mockups-evil`). `http(s)://`/`data:`/`about:`/unparseable/non-string → false.
+  **Unit-tested in isolation — all 13 cases pass** (see below).
+- **`lib/registry.js`** — `registerCapability(name, factory(ctx))` + `buildHostApi(ctx)`. HostApi is
+  a **per-session** object whose prototype (chained to `RpcTarget.prototype`) carries a **getter per
+  capability** (capnweb rejects *own instance properties* — only prototype methods/getters are
+  reachable over RPC; discovered + worked around this session). Getter returns `factory(ctx)`, built
+  lazily + cached per session. Factory may return a **function** (`host.name(...)`) or an
+  **RpcTarget** (namespace, `host.name.method(...)`).
+- **`lib/host.js`** — `activate`/`deactivate`. Observes browser webview pane items; per webview, on
+  each `dom-ready`: tears down any prior session, reads `webview.getURL()`, and **only if trusted**
+  opens `new RpcSession(hostTransport(webview), buildHostApi({item,webview,url}))` + injects the guest
+  bundle. Untrusted → logs + does nothing (zero surface). Disposes the session on pane-item close
+  (`onWillDestroyPaneItem`) and on reload. Registers the built-in `ping` capability. Keeps the
+  `tranquil-rpc:open-webview-devtools` command.
+- **`lib/guest.js`** — sets `window.tranquilHost = session.getRemoteMain()`, fires
+  `tranquilhost:ready`, then self-checks `ping()` (logs `[tranquil-rpc] ping -> pong` in the **page**
+  console). Real capability usage replaces the self-check in Phase 2.
+- **`lib/index.js`** — bundle entry (package `main` → `dist/host.js`). Re-exports `activate`,
+  `deactivate`, `registerCapability`, `addTrustedRoot`, `isTrusted`, and `provideRpc` (service).
+- Transport (`transport-host.js`/`transport-guest.js`/`queue.js`/`channel.js`) **unchanged** from
+  Phase 0 — validated there.
+- **`package.json`** — added `providedServices."tranquil-rpc" → provideRpc`. `main` = `dist/host.js`.
+- **`build.mjs`** — host entry now `lib/index.js` → `dist/host.js`; guest `lib/guest.js` →
+  `dist/tranquil-rpc-guest.js`. Both rebuilt; all 6 CJS exports confirmed in `dist/host.js`.
 
-  ⚠️ **Gotcha:** the `dev/packages` symlink alone did NOT load the package in `yarn start` — owned
-  packages load via `packageDependencies` + `node_modules` (bundled), not the dev/packages path.
-  First run showed zero `[tranquil-rpc]` logs until the package.json wiring was added.
+### Wiring into tranquil-automations (registers the trusted root)
+- `package.json` dep `"tranquil-rpc": "link:../tranquil-rpc"` + `node_modules/tranquil-rpc` symlink
+  (so `require("tranquil-rpc")` resolves from the automations repo).
+- `lib/tranquil-automations.js`: `const rpc = require("tranquil-rpc")`, and inside the
+  `showBusinessMockups` block (before `openMockups`) `rpc.addTrustedRoot(MOCKUPS_DIR)` — synchronous,
+  so the mockups' first load is already trusted (avoids a service-timing race). **Pane controls NOT
+  touched** — `registerMockupControls` still runs (that cutover is Phase 2).
 
-### Design notes / decisions confirmed
-- Cap'n Web `RpcSession` does **not** send on construction — it starts a `readLoop()` awaiting
-  `receive()` and only sends when a call is made. Since the **guest initiates** `ping`, every send
-  happens after both sides are listening → no lost-message race. (Host attaches its `ipc-message`
-  listener before injecting the guest.)
-- Host bundled to CJS because the Electron renderer can't `require` capnweb's ESM directly.
-- Guest transport reuses the existing `window.electron` bridge — **preload unchanged**.
+### Verified automatically (no app needed)
+- **Registry model** — a Node in-process capnweb harness confirmed the exact shipped pattern:
+  per-session prototype getters → `instanceof RpcTarget` holds; `host.ping()` (fn), `host.paneControls.register()`
+  (RpcTarget namespace), `host.notify(msg)` (fn) all round-trip; an **unregistered** name is rejected
+  (`'bogus' is not a function`) → capability surface = exactly the registered set.
+- **Trust classifier** — 13/13 cases pass: trusted mockup files (incl. query/hash), the root dir,
+  nested paths → true; `…-evil` sibling, `https://`, `http://`, `file:///etc/passwd`, `data:`,
+  `about:blank`, empty/null/undefined → false.
 
 ### Deviations from plan
-- Spike lives in the real `tranquil-rpc/` dir (not throwaway scratch) — it's minimal and seeds
-  Phase 1. The `SpikeHostApi`, the file://-only targeting, and the guest self-test are clearly
-  marked spike-only and get replaced in Phase 1 (real trust classifier, registry, ping capability).
-
-### Already verified automatically (no app needed)
-- **Cap'n Web usage** (`RpcSession` + `RpcTarget` + passing a callback as a stub) round-trips in a
-  Node in-process harness: `host.ping(cb)` returns `"pong"` and `cb` fires. So the RPC layer and
-  our API usage are correct — the manual gate below is **only** exercising the webview IPC
-  transport (`webview.send`/`ipc-message` ⇄ `window.electron.sendToHost`/`receive`) and the
-  host-injection path.
-
-### Run 1 result (2026-07-02)
-Package loaded + activated. **`properties.html` connected; guest→host proven** (`guest connected`,
-`host.ping() invoked by guest`). Two issues fixed before run 2:
-- Injected before `dom-ready` → `session setup failed: WebView must be attached to the DOM`. Now
-  inject on the `dom-ready` event (and only if `getWebContentsId()` shows it's ready).
-- `main-view.html`'s `<webview>` wasn't found in 2s of polling → never attached. Now `webviewFor`
-  also queries `atom.views.getView(item)`, polling is more patient (10s) and quiet.
-- `host.ping` now **awaits** the callback and logs `✅ host→guest callback completed`, so the
-  host→guest direction (the still-unconfirmed half) is explicitly verified host-side.
+- `index.js` is the **bundle entry** (`main`), not a separate un-bundled require file — it re-exports
+  host/registry/trust so `require("tranquil-rpc")` and the service share the singletons. Same effect
+  as planned.
+- Trusted-root registration uses **`require("tranquil-rpc").addTrustedRoot`** (not the service) to be
+  synchronous at activate. The service (`provideRpc`) still exists; Phase 2 chooses service vs require
+  for capability registration.
+- Bundle is `dist/host.js` (not `host.cjs`) — matches the actual filename since Phase 0.
+- Guest keeps a tiny `ping()` self-check (page console) as the Phase 1 gate signal; removed in Phase 2.
 
 ## ▶ MANUAL VERIFICATION GATE (please run)
 
-Everything now logs to the **host console** (the editor window's DevTools) — no need to open the
-webview's own DevTools. All spike logs are prefixed `[tranquil-rpc]`.
-
-Pre-req: at least one **file:// webview** must be open. Normally the business mockups
-(`tranquil-automations.showBusinessMockups` enabled). If none are open, open any local `.html`
-in the tranquil browser.
+Pre-req: business mockups enabled (`tranquil-automations.showBusinessMockups`, default on) so at
+least one **trusted file:// mockup** opens. For the untrusted check, also open any remote page
+(e.g. a `https://` URL) in the tranquil browser.
 
 1. Rebuild + restart:
-   `source ~/.nvm/nvm.sh && nvm use && (cd ../tranquil-rpc && npm run build)` then `yarn start`
-   in `tranquil-client` (full restart).
-2. **Open the editor window's DevTools:** menu **View → Developer → Toggle Developer Tools**
-   (or ⌥⌘I with the main window focused). Select the **Console** tab. Filter for `tranquil-rpc`.
-3. Expect this sequence:
-   - `[tranquil-rpc] host module loaded`  (package loaded)
-   - `[tranquil-rpc] activated …`  (activate ran)
-   - `[tranquil-rpc] pane item seen: file://…` then `attaching to webview` + `host session created + guest injected`
-   - `[tranquil-rpc] guest report → guest connected at file://…`
-   - `[tranquil-rpc] host.ping() invoked by guest`
-   - `[tranquil-rpc] guest report → ✅ callback stub ran IN PAGE at file://…`
-   - `[tranquil-rpc] guest report → ✅ host.ping() resolved (guest → host) -> pong`
+   `source ~/.nvm/nvm.sh && nvm use && (cd ../tranquil-rpc && npm run build)` then `yarn start` in
+   `tranquil-client` (full restart).
+2. **Editor window DevTools** (⌥⌘I, Console, filter `tranquil-rpc`). Expect on startup:
+   - `[tranquil-rpc] host module loaded`
+   - `[tranquil-rpc] activated; trusted roots: […/tranquil-automations/mockups]`
+   - `[tranquil-rpc] trusted session opened + guest injected: file://…/mockups/main-view.html`
+     (and again for `properties.html`)
+   - `[tranquil-rpc] ping() invoked by guest: file://…` (the guest self-check round-tripping)
+3. **Trusted page** — focus a mockup, run `tranquil-rpc:open-webview-devtools`. In that webview
+   console expect `[tranquil-rpc] connected; window.tranquilHost ready` and `[tranquil-rpc] ping -> pong`.
+   Then confirm interactively: `await window.tranquilHost.ping()` → `"pong"`.
+4. **Untrusted page** — open a `https://` page; its webview console shows **no** `[tranquil-rpc]`
+   lines, and `window.tranquilHost` is **`undefined`**. Host console shows
+   `[tranquil-rpc] untrusted — no runtime injected: https://…`.
+5. **Dispose** — close a mockup tab; **no console errors**. (Reloading a mockup re-injects and
+   re-runs the ping check cleanly.)
 
-**PASS** = both ✅ reports appear (the callback one shows the mockup's file:// URL, proving it ran
-in the page). **FAIL** = reassess before Phase 1 (see below).
+**PASS** = trusted mockup has `window.tranquilHost` + `ping` → `pong`; remote page has it
+**undefined**; close is clean. **FAIL** = trust boundary or session lifecycle is wrong — fix before
+Phase 2.
 
 Diagnostics:
-- See `host module loaded` but not `activated`? The package loaded but activate threw — check for
-  a following error.
-- See no `[tranquil-rpc]` lines at all? Dev package not loaded — confirm the
-  `~/.tranquil/dev/packages/tranquil-rpc` symlink and that `yarn start` runs in dev mode.
-- See `pane item seen` but no file:// ones? No file:// webview is open (enable business mockups
-  or open a local .html).
-- Want to see the webview's own console anyway? Focus the mockup and run
-  **`tranquil-rpc:open-webview-devtools`** from the command palette.
+- No `[tranquil-rpc]` lines at all → package didn't load (check the `~/.tranquil/dev/packages/tranquil-rpc`
+  symlink + `dist/` exists) OR `require("tranquil-rpc")` threw in automations at load (would silently
+  crash that file — check `node_modules/tranquil-rpc` symlink in the automations repo).
+- `activated` but `trusted roots: []` → automations didn't register the root (its `require` failed,
+  or `showBusinessMockups` is off).
+- Session opens but `window.tranquilHost` missing in the page → guest injection failed (see the host
+  console `guest injection failed` line) or transport wiring.
+- A mockup shows `untrusted` → its URL isn't under the registered root (check the logged URL vs root).
 
-### If it fails — likely causes
-- `Promise.withResolvers is not a function` → polyfill banner not applied (rebuild) or a deeper V8 gap.
-- Nothing logs at all → dev package not loaded (check `~/.tranquil/dev/packages/tranquil-rpc` symlink,
-  and that `dist/` exists), or no file:// mockups are open.
-- Guest connects but ping never resolves → transport wiring (channel name mismatch, `ipc-message`
-  args shape). Add logging in `transport-host.js` / `transport-guest.js`.
-- Injection error in host console → `webview.executeJavaScript` timing; the `did-stop-loading`
-  retry should cover it.
-
-## Next phase entry point — **Phase 1**
-Replace the spike with the real package: `trust.js` (default-deny; only file:// under registered
-roots), `registry.js` (`registerCapability`/`buildHostApi`), real per-session HostApi with a trivial
-`ping` capability, wire into `tranquil-client` (link dep + keep the dev symlink), `addTrustedRoot`
-for the mockups dir, and confirm remote `https://` pages get **no** `window.tranquilHost`. Then its
-gate (see plan).
+## Next phase entry point — **Phase 2** (pane controls capability + cutover)
+Add `PaneControlsCap` + `NotifyCap` (host `RpcTarget`s) in tranquil-automations
+(`lib/pane-controls-capability.js`); `registerCapability("paneControls", …)` + `("notify", …)` (via
+service or require — decide, note the timing). Convert both mockups to self-register (⟳ reload / ⤒
+scroll-top / ⓘ about → `notify`) on `tranquilhost:ready`. **Remove** `registerMockupControls()` +
+`SCROLL_TOP_JS` from `mockups.js`. Add host-side default controls for remote/untrusted browser pages.
+`pane-controls.js` itself stays unchanged. Then Phase 2's gate (see plan).

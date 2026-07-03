@@ -7,6 +7,13 @@
   "author": { "name": "Tranquil Labs", "url": "https://github.com/tranquillabs" },
   "license": "MIT",
   "engines": { "atom": ">=1.0.0 <2.0.0" },
+  "providedServices": {
+    "tranquil-rpc": {
+      "versions": {
+        "1.0.0": "provideRpc"
+      }
+    }
+  },
   "scripts": {
     "build": "node build.mjs"
   },

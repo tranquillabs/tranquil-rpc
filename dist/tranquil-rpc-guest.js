@@ -2693,24 +2693,9 @@ var tranquilRpcGuest = (() => {
     }
     if (window.tranquilHost) return;
     const session = new RpcSession(guestTransport());
-    const host = session.getRemoteMain();
-    window.tranquilHost = host;
+    window.tranquilHost = session.getRemoteMain();
     window.dispatchEvent(new Event("tranquilhost:ready"));
-    console.log("[tranquil-rpc spike] guest connected; window.tranquilHost set");
-    (async () => {
-      try {
-        host.report("guest connected at " + location.href);
-        const result = await host.ping(
-          () => host.report("\u2705 callback stub ran IN PAGE at " + location.href)
-        );
-        host.report("\u2705 host.ping() resolved (guest \u2192 host) -> " + result);
-      } catch (e) {
-        try {
-          host.report("\u274C ping failed: " + (e && e.message ? e.message : String(e)));
-        } catch (_) {
-          console.error("[tranquil-rpc spike] ping failed and report failed", e);
-        }
-      }
-    })();
+    console.log("[tranquil-rpc] connected; window.tranquilHost ready");
+    Promise.resolve(window.tranquilHost.ping()).then((r) => console.log("[tranquil-rpc] ping ->", r)).catch((e) => console.error("[tranquil-rpc] ping failed:", e));
   })();
 })();

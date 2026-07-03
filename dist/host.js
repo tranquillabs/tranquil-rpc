@@ -27,13 +27,17 @@ var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__ge
 ));
 var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
 
-// lib/host.js
-var host_exports = {};
-__export(host_exports, {
+// lib/index.js
+var lib_exports = {};
+__export(lib_exports, {
   activate: () => activate,
-  deactivate: () => deactivate
+  addTrustedRoot: () => addTrustedRoot,
+  deactivate: () => deactivate,
+  isTrusted: () => isTrusted,
+  provideRpc: () => provideRpc,
+  registerCapability: () => registerCapability
 });
-module.exports = __toCommonJS(host_exports);
+module.exports = __toCommonJS(lib_exports);
 
 // node_modules/capnweb/dist/index.js
 var WORKERS_MODULE_SYMBOL = Symbol("workers-module");
@@ -130,8 +134,8 @@ var streamImpl = {
   createReadableStreamHook: streamNotLoaded
 };
 var StubHook = class {
-  stream(path2, args) {
-    let pulled = this.call(path2, args).pull();
+  stream(path3, args) {
+    let pulled = this.call(path3, args).pull();
     let promise;
     if (pulled instanceof Promise) promise = pulled.then((p) => {
       p.dispose();
@@ -149,13 +153,13 @@ var ErrorStubHook = class extends StubHook {
     super();
     this.error = error;
   }
-  call(path2, args) {
+  call(path3, args) {
     return this;
   }
-  map(path2, captures, instructions) {
+  map(path3, captures, instructions) {
     return this;
   }
-  get(path2) {
+  get(path3) {
     return this;
   }
   dup() {
@@ -177,8 +181,8 @@ var ErrorStubHook = class extends StubHook {
   }
 };
 var DISPOSED_HOOK = new ErrorStubHook(/* @__PURE__ */ new Error("Attempted to use RPC stub after it has been disposed."));
-var doCall = (hook, path2, params) => {
-  return hook.call(path2, params);
+var doCall = (hook, path3, params) => {
+  return hook.call(path3, params);
 };
 function withCallInterceptor(interceptor, callback) {
   let oldValue = doCall;
@@ -728,10 +732,10 @@ var RpcPayload = class RpcPayload2 {
     }
   }
 };
-function followPath(value, parent, path2, owner) {
-  for (let i = 0; i < path2.length; i++) {
+function followPath(value, parent, path3, owner) {
+  for (let i = 0; i < path3.length; i++) {
     parent = value;
-    let part = path2[i];
+    let part = path3[i];
     if (part in Object.prototype) {
       value = void 0;
       continue;
@@ -757,7 +761,7 @@ function followPath(value, parent, path2, owner) {
         let { hook, pathIfPromise } = unwrapStubAndPath(value);
         return {
           hook,
-          remainingPath: pathIfPromise ? pathIfPromise.concat(path2.slice(i)) : path2.slice(i)
+          remainingPath: pathIfPromise ? pathIfPromise.concat(path3.slice(i)) : path3.slice(i)
         };
       }
       case "writable":
@@ -783,8 +787,8 @@ function followPath(value, parent, path2, owner) {
       case "unsupported":
         if (i === 0) throw new TypeError(`RPC stub points at a non-serializable type.`);
         else {
-          let prefix = path2.slice(0, i).join(".");
-          let remainder = path2.slice(0, i).join(".");
+          let prefix = path3.slice(0, i).join(".");
+          let remainder = path3.slice(0, i).join(".");
           throw new TypeError(`'${prefix}' is not a serializable type, so property ${remainder} cannot be accessed.`);
         }
       default:
@@ -805,12 +809,12 @@ function followPath(value, parent, path2, owner) {
   };
 }
 var ValueStubHook = class extends StubHook {
-  call(path2, args) {
+  call(path3, args) {
     try {
       let { value, owner } = this.getValue();
-      let followResult = followPath(value, void 0, path2, owner);
+      let followResult = followPath(value, void 0, path3, owner);
       if (followResult.hook) return followResult.hook.call(followResult.remainingPath, args);
-      if (typeof followResult.value != "function") throw new TypeError(`'${path2.join(".")}' is not a function.`);
+      if (typeof followResult.value != "function") throw new TypeError(`'${path3.join(".")}' is not a function.`);
       return new PromiseStubHook(args.deliverCall(followResult.value, followResult.parent).then((payload) => {
         return new PayloadStubHook(payload);
       }));
@@ -818,12 +822,12 @@ var ValueStubHook = class extends StubHook {
       return new ErrorStubHook(err);
     }
   }
-  map(path2, captures, instructions) {
+  map(path3, captures, instructions) {
     try {
       let followResult;
       try {
         let { value, owner } = this.getValue();
-        followResult = followPath(value, void 0, path2, owner);
+        followResult = followPath(value, void 0, path3, owner);
       } catch (err) {
         for (let cap of captures) cap.dispose();
         throw err;
@@ -834,11 +838,11 @@ var ValueStubHook = class extends StubHook {
       return new ErrorStubHook(err);
     }
   }
-  get(path2) {
+  get(path3) {
     try {
       let { value, owner } = this.getValue();
-      if (path2.length === 0 && owner === null) throw new Error("Can't dup an RpcTarget stub as a promise.");
-      let followResult = followPath(value, void 0, path2, owner);
+      if (path3.length === 0 && owner === null) throw new Error("Can't dup an RpcTarget stub as a promise.");
+      let followResult = followPath(value, void 0, path3, owner);
       if (followResult.hook) return followResult.hook.get(followResult.remainingPath);
       return new PayloadStubHook(RpcPayload.deepCopyFrom(followResult.value, followResult.parent, followResult.owner));
     } catch (err) {
@@ -954,24 +958,24 @@ var PromiseStubHook = class PromiseStubHook2 extends StubHook {
       return res;
     });
   }
-  call(path2, args) {
+  call(path3, args) {
     args.ensureDeepCopied();
-    return new PromiseStubHook2(this.promise.then((hook) => hook.call(path2, args)));
+    return new PromiseStubHook2(this.promise.then((hook) => hook.call(path3, args)));
   }
-  stream(path2, args) {
+  stream(path3, args) {
     args.ensureDeepCopied();
     return { promise: this.promise.then((hook) => {
-      return hook.stream(path2, args).promise;
+      return hook.stream(path3, args).promise;
     }) };
   }
-  map(path2, captures, instructions) {
-    return new PromiseStubHook2(this.promise.then((hook) => hook.map(path2, captures, instructions), (err) => {
+  map(path3, captures, instructions) {
+    return new PromiseStubHook2(this.promise.then((hook) => hook.map(path3, captures, instructions), (err) => {
       for (let cap of captures) cap.dispose();
       throw err;
     }));
   }
-  get(path2) {
-    return new PromiseStubHook2(this.promise.then((hook) => hook.get(path2)));
+  get(path3) {
+    return new PromiseStubHook2(this.promise.then((hook) => hook.get(path3)));
   }
   dup() {
     if (this.resolution) return this.resolution.dup();
@@ -1457,23 +1461,23 @@ var Evaluator = class Evaluator2 {
           };
           if (value.length == 2) if (isPromise) return addStub(hook.get([]));
           else return addStub(hook.dup());
-          let path2 = value[2];
-          if (!(path2 instanceof Array)) break;
-          if (!path2.every((part) => {
+          let path3 = value[2];
+          if (!(path3 instanceof Array)) break;
+          if (!path3.every((part) => {
             return typeof part == "string" || typeof part == "number";
           })) break;
-          if (value.length == 3) return addStub(hook.get(path2));
+          if (value.length == 3) return addStub(hook.get(path3));
           let args = value[3];
           if (!(args instanceof Array)) break;
           args = new Evaluator2(this.importer).evaluate([args]);
-          return addStub(hook.call(path2, args));
+          return addStub(hook.call(path3, args));
         }
         case "remap": {
           if (value.length !== 5 || typeof value[1] !== "number" || !(value[2] instanceof Array) || !(value[3] instanceof Array) || !(value[4] instanceof Array)) break;
           let hook = this.importer.getExport(value[1]);
           if (!hook) throw new Error(`no such entry on exports table: ${value[1]}`);
-          let path2 = value[2];
-          if (!path2.every((part) => {
+          let path3 = value[2];
+          if (!path3.every((part) => {
             return typeof part == "string" || typeof part == "number";
           })) break;
           let captures = value[3].map((cap) => {
@@ -1486,7 +1490,7 @@ var Evaluator = class Evaluator2 {
             }
           });
           let instructions = value[4];
-          let promise = new RpcPromise$1(hook.map(path2, captures, instructions), []);
+          let promise = new RpcPromise$1(hook.map(path3, captures, instructions), []);
           this.promises.push({
             promise,
             parent,
@@ -1670,24 +1674,24 @@ var RpcImportHook = class RpcImportHook2 extends StubHook {
     ++entry.localRefcount;
     this.entry = entry;
   }
-  collectPath(path2) {
+  collectPath(path3) {
     return this;
   }
   getEntry() {
     if (this.entry) return this.entry;
     else throw new Error("This RpcImportHook was already disposed.");
   }
-  call(path2, args) {
+  call(path3, args) {
     let entry = this.getEntry();
-    if (entry.resolution) return entry.resolution.call(path2, args);
-    else return entry.session.sendCall(entry.importId, path2, args);
+    if (entry.resolution) return entry.resolution.call(path3, args);
+    else return entry.session.sendCall(entry.importId, path3, args);
   }
-  stream(path2, args) {
+  stream(path3, args) {
     let entry = this.getEntry();
-    if (entry.resolution) return entry.resolution.stream(path2, args);
-    else return entry.session.sendStream(entry.importId, path2, args);
+    if (entry.resolution) return entry.resolution.stream(path3, args);
+    else return entry.session.sendStream(entry.importId, path3, args);
   }
-  map(path2, captures, instructions) {
+  map(path3, captures, instructions) {
     let entry;
     try {
       entry = this.getEntry();
@@ -1695,13 +1699,13 @@ var RpcImportHook = class RpcImportHook2 extends StubHook {
       for (let cap of captures) cap.dispose();
       throw err;
     }
-    if (entry.resolution) return entry.resolution.map(path2, captures, instructions);
-    else return entry.session.sendMap(entry.importId, path2, captures, instructions);
+    if (entry.resolution) return entry.resolution.map(path3, captures, instructions);
+    else return entry.session.sendMap(entry.importId, path3, captures, instructions);
   }
-  get(path2) {
+  get(path3) {
     let entry = this.getEntry();
-    if (entry.resolution) return entry.resolution.get(path2);
-    else return entry.session.sendCall(entry.importId, path2);
+    if (entry.resolution) return entry.resolution.get(path3);
+    else return entry.session.sendCall(entry.importId, path3);
   }
   dup() {
     return new RpcImportHook2(false, this.getEntry());
@@ -1949,12 +1953,12 @@ var RpcSessionImpl = class {
       return;
     }
   }
-  sendCall(id, path2, args) {
+  sendCall(id, path3, args) {
     if (this.abortReason) throw this.abortReason;
     let value = [
       "pipeline",
       id,
-      path2
+      path3
     ];
     if (args) {
       let devalue = Devaluator.devaluate(args.value, void 0, this, args, this.encodingLevel);
@@ -1965,12 +1969,12 @@ var RpcSessionImpl = class {
     this.imports.push(entry);
     return new RpcImportHook(true, entry);
   }
-  sendStream(id, path2, args) {
+  sendStream(id, path3, args) {
     if (this.abortReason) throw this.abortReason;
     let value = [
       "pipeline",
       id,
-      path2
+      path3
     ];
     let devalue = Devaluator.devaluate(args.value, void 0, this, args, this.encodingLevel);
     value.push(devalue[0]);
@@ -1993,7 +1997,7 @@ var RpcSessionImpl = class {
       size
     };
   }
-  sendMap(id, path2, captures, instructions) {
+  sendMap(id, path3, captures, instructions) {
     if (this.abortReason) {
       for (let cap of captures) cap.dispose();
       throw this.abortReason;
@@ -2001,7 +2005,7 @@ var RpcSessionImpl = class {
     let value = [
       "remap",
       id,
-      path2,
+      path3,
       captures.map((hook) => {
         let importId = this.getImport(hook);
         if (importId !== void 0) return ["import", importId];
@@ -2197,18 +2201,18 @@ var MapBuilder = class {
   context;
   captureMap = /* @__PURE__ */ new Map();
   instructions = [];
-  constructor(subject, path2) {
+  constructor(subject, path3) {
     if (currentMapBuilder) this.context = {
       parent: currentMapBuilder,
       captures: [],
       subject: currentMapBuilder.capture(subject),
-      path: path2
+      path: path3
     };
     else this.context = {
       parent: void 0,
       captures: [],
       subject,
-      path: path2
+      path: path3
     };
     currentMapBuilder = this;
   }
@@ -2237,24 +2241,24 @@ var MapBuilder = class {
       return new MapVariableHook(this.context.parent, this.context.parent.instructions.length);
     } else return this.context.subject.map(this.context.path, this.context.captures, this.instructions);
   }
-  pushCall(hook, path2, params) {
+  pushCall(hook, path3, params) {
     let devalued = Devaluator.devaluate(params.value, void 0, this, params);
     devalued = devalued[0];
     let subject = this.capture(hook.dup());
     this.instructions.push([
       "pipeline",
       subject,
-      path2,
+      path3,
       devalued
     ]);
     return new MapVariableHook(this, this.instructions.length);
   }
-  pushGet(hook, path2) {
+  pushGet(hook, path3) {
     let subject = this.capture(hook.dup());
     this.instructions.push([
       "pipeline",
       subject,
-      path2
+      path3
     ]);
     return new MapVariableHook(this, this.instructions.length);
   }
@@ -2288,8 +2292,8 @@ var MapBuilder = class {
   onSendError(error) {
   }
 };
-mapImpl.sendMap = (hook, path2, func) => {
-  let builder = new MapBuilder(hook, path2);
+mapImpl.sendMap = (hook, path3, func) => {
+  let builder = new MapBuilder(hook, path3);
   let result;
   try {
     result = RpcPayload.fromAppReturn(withCallInterceptor(builder.pushCall.bind(builder), () => {
@@ -2321,15 +2325,15 @@ var MapVariableHook = class extends StubHook {
   }
   dispose() {
   }
-  get(path2) {
-    if (path2.length == 0) return this;
-    else if (currentMapBuilder) return currentMapBuilder.pushGet(this, path2);
+  get(path3) {
+    if (path3.length == 0) return this;
+    else if (currentMapBuilder) return currentMapBuilder.pushGet(this, path3);
     else throwMapperBuilderUseError();
   }
-  call(path2, args) {
+  call(path3, args) {
     throwMapperBuilderUseError();
   }
-  map(path2, captures, instructions) {
+  map(path3, captures, instructions) {
     throwMapperBuilderUseError();
   }
   pull() {
@@ -2430,11 +2434,11 @@ var WritableStreamStubHook = class WritableStreamStubHook2 extends StubHook {
     if (this.state) return this.state;
     else throw new Error("Attempted to use a WritableStreamStubHook after it was disposed.");
   }
-  call(path2, args) {
+  call(path3, args) {
     try {
       let state = this.getState();
-      if (path2.length !== 1 || typeof path2[0] !== "string") throw new Error("WritableStream stub only supports direct method calls");
-      const method = path2[0];
+      if (path3.length !== 1 || typeof path3[0] !== "string") throw new Error("WritableStream stub only supports direct method calls");
+      const method = path3[0];
       if (method !== "write" && method !== "close" && method !== "abort") {
         args.dispose();
         throw new Error(`Unknown WritableStream method: ${method}`);
@@ -2446,11 +2450,11 @@ var WritableStreamStubHook = class WritableStreamStubHook2 extends StubHook {
       return new ErrorStubHook(err);
     }
   }
-  map(path2, captures, instructions) {
+  map(path3, captures, instructions) {
     for (let cap of captures) cap.dispose();
     return new ErrorStubHook(/* @__PURE__ */ new Error("Cannot use map() on a WritableStream"));
   }
-  get(path2) {
+  get(path3) {
     return new ErrorStubHook(/* @__PURE__ */ new Error("Cannot access properties on a WritableStream stub"));
   }
   dup() {
@@ -2643,15 +2647,15 @@ var ReadableStreamStubHook = class ReadableStreamStubHook2 extends StubHook {
     this.state = state;
     if (dupFrom) ++state.refcount;
   }
-  call(path2, args) {
+  call(path3, args) {
     args.dispose();
     return new ErrorStubHook(/* @__PURE__ */ new Error("Cannot call methods on a ReadableStream stub"));
   }
-  map(path2, captures, instructions) {
+  map(path3, captures, instructions) {
     for (let cap of captures) cap.dispose();
     return new ErrorStubHook(/* @__PURE__ */ new Error("Cannot use map() on a ReadableStream"));
   }
-  get(path2) {
+  get(path3) {
     return new ErrorStubHook(/* @__PURE__ */ new Error("Cannot access properties on a ReadableStream stub"));
   }
   dup() {
@@ -2688,6 +2692,8 @@ var RpcTarget = RpcTarget$1;
 
 // lib/host.js
 var import_atom = require("atom");
+var import_fs = __toESM(require("fs"));
+var import_path2 = __toESM(require("path"));
 
 // lib/channel.js
 var CHANNEL = "tranquil:rpc";
@@ -2735,38 +2741,93 @@ function hostTransport(webview) {
   };
 }
 
-// lib/host.js
-var import_fs = __toESM(require("fs"));
+// lib/registry.js
+var factories = /* @__PURE__ */ new Map();
+function registerCapability(name, factory) {
+  if (typeof name !== "string" || name.length === 0) {
+    throw new Error("registerCapability: name must be a non-empty string");
+  }
+  if (typeof factory !== "function") {
+    throw new Error(`registerCapability: factory for "${name}" must be a function`);
+  }
+  factories.set(name, factory);
+}
+function buildHostApi(ctx) {
+  const proto = Object.create(RpcTarget.prototype);
+  const cache = /* @__PURE__ */ new Map();
+  for (const [name, factory] of factories) {
+    Object.defineProperty(proto, name, {
+      configurable: true,
+      enumerable: false,
+      get() {
+        if (!cache.has(name)) cache.set(name, factory(ctx));
+        return cache.get(name);
+      }
+    });
+  }
+  return Object.create(proto);
+}
+
+// lib/trust.js
 var import_path = __toESM(require("path"));
+var import_url = require("url");
+var roots = /* @__PURE__ */ new Set();
+function toRootPath(input) {
+  if (typeof input !== "string" || input.length === 0) return null;
+  let abs;
+  try {
+    abs = input.startsWith("file://") ? (0, import_url.fileURLToPath)(input) : import_path.default.resolve(input);
+  } catch (e) {
+    return null;
+  }
+  return abs.replace(/[\\/]+$/, "");
+}
+function addTrustedRoot(input) {
+  const root = toRootPath(input);
+  if (root) roots.add(root);
+  return root;
+}
+function isTrusted(url) {
+  if (typeof url !== "string" || url.length === 0) return false;
+  let parsed;
+  try {
+    parsed = new URL(url);
+  } catch (e) {
+    return false;
+  }
+  if (parsed.protocol !== "file:") return false;
+  let filePath;
+  try {
+    parsed.search = "";
+    parsed.hash = "";
+    filePath = (0, import_url.fileURLToPath)(parsed);
+  } catch (e) {
+    return false;
+  }
+  const normalized = filePath.replace(/[\\/]+$/, "");
+  for (const root of roots) {
+    if (normalized === root || normalized.startsWith(root + import_path.default.sep)) return true;
+  }
+  return false;
+}
+function trustedRoots() {
+  return [...roots];
+}
+
+// lib/host.js
 var TAG = "[tranquil-rpc]";
 console.log(TAG, "host module loaded");
+var subscriptions = null;
 var guestBundleCache = null;
 function guestBundle() {
   if (guestBundleCache == null) {
     guestBundleCache = import_fs.default.readFileSync(
-      import_path.default.join(__dirname, "tranquil-rpc-guest.js"),
+      import_path2.default.join(__dirname, "tranquil-rpc-guest.js"),
       "utf8"
     );
   }
   return guestBundleCache;
 }
-var SpikeHostApi = class extends RpcTarget {
-  async ping(cb) {
-    console.log(TAG, "host.ping() invoked by guest");
-    if (cb) {
-      try {
-        await cb();
-        console.log(TAG, "\u2705 host\u2192guest callback completed");
-      } catch (e) {
-        console.error(TAG, "callback invocation failed", e);
-      }
-    }
-    return "pong";
-  }
-  report(msg) {
-    console.log(TAG, "guest report \u2192", msg);
-  }
-};
 function webviewFor(item) {
   const outlet = item && item.view && item.view.htmlv && item.view.htmlv[0];
   if (outlet) return outlet;
@@ -2781,57 +2842,75 @@ function isReady(webview) {
     return false;
   }
 }
-function attach(webview, url, subscriptions) {
+function manage(webview, item) {
   let current = null;
-  const start = () => {
-    if (current) {
-      try {
-        current.transport.abort("reload");
-      } catch (e) {
-      }
-      current = null;
+  const teardown = (reason) => {
+    if (!current) return;
+    try {
+      current.transport.abort(reason);
+    } catch (e) {
+    }
+    current = null;
+  };
+  const onLoad = () => {
+    teardown("reload");
+    let url;
+    try {
+      url = webview.getURL();
+    } catch (e) {
+      url = null;
+    }
+    if (!url) return;
+    if (!isTrusted(url)) {
+      console.log(TAG, "untrusted \u2014 no runtime injected:", url);
+      return;
     }
     const transport = hostTransport(webview);
-    const session = new RpcSession(transport, new SpikeHostApi());
+    const session = new RpcSession(transport, buildHostApi({ item, webview, url }));
     current = { transport, session };
-    webview.executeJavaScript(guestBundle()).then(() => console.log(TAG, "session created + guest injected:", url)).catch((e) => console.error(TAG, "guest injection failed", e));
+    webview.executeJavaScript(guestBundle()).then(() => console.log(TAG, "trusted session opened + guest injected:", url)).catch((e) => console.error(TAG, "guest injection failed:", e));
   };
-  webview.addEventListener("dom-ready", start);
-  if (isReady(webview)) start();
-  subscriptions.add(
-    new import_atom.Disposable(() => {
-      webview.removeEventListener("dom-ready", start);
-      if (current) {
-        try {
-          current.transport.abort("teardown");
-        } catch (e) {
-        }
-      }
-    })
-  );
+  webview.addEventListener("dom-ready", onLoad);
+  if (isReady(webview)) onLoad();
+  return new import_atom.Disposable(() => {
+    webview.removeEventListener("dom-ready", onLoad);
+    teardown("closed");
+  });
 }
 function activate() {
-  const subscriptions = new import_atom.CompositeDisposable();
-  const attached = /* @__PURE__ */ new WeakSet();
+  subscriptions = new import_atom.CompositeDisposable();
+  const managed = /* @__PURE__ */ new WeakMap();
+  registerCapability("ping", (ctx) => () => {
+    console.log(TAG, "ping() invoked by guest:", ctx.url);
+    return "pong";
+  });
   const consider = (item) => {
-    const url = item && item.getURL && item.getURL();
-    if (!url || url.indexOf("file://") !== 0) return;
+    if (!item || typeof item.getURL !== "function") return;
     let tries = 0;
     const tryAttach = () => {
       const webview = webviewFor(item);
       if (!webview) {
         if (tries++ < 100) setTimeout(tryAttach, 100);
-        else console.warn(TAG, "gave up finding a webview for", url);
         return;
       }
-      if (attached.has(webview)) return;
-      attached.add(webview);
-      console.log(TAG, "attaching to webview:", url);
-      attach(webview, url, subscriptions);
+      if (managed.has(webview)) return;
+      const disp = manage(webview, item);
+      managed.set(webview, disp);
+      subscriptions.add(disp);
     };
     tryAttach();
   };
   subscriptions.add(atom.workspace.observePaneItems(consider));
+  subscriptions.add(
+    atom.workspace.onWillDestroyPaneItem(({ item }) => {
+      const webview = webviewFor(item);
+      const disp = webview && managed.get(webview);
+      if (disp) {
+        disp.dispose();
+        managed.delete(webview);
+      }
+    })
+  );
   subscriptions.add(
     atom.commands.add("atom-workspace", {
       "tranquil-rpc:open-webview-devtools": () => {
@@ -2841,13 +2920,26 @@ function activate() {
       }
     })
   );
-  console.log(TAG, "activated");
+  console.log(TAG, "activated; trusted roots:", trustedRoots());
   return subscriptions;
 }
 function deactivate() {
+  if (subscriptions) {
+    subscriptions.dispose();
+    subscriptions = null;
+  }
+}
+
+// lib/index.js
+function provideRpc() {
+  return { registerCapability, addTrustedRoot, isTrusted };
 }
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {
   activate,
-  deactivate
+  addTrustedRoot,
+  deactivate,
+  isTrusted,
+  provideRpc,
+  registerCapability
 });
