@@ -25,14 +25,23 @@ export type PaneControlAction = () => void | Promise<void>;
 
 /**
  * One tab-bar pane control a trusted page registers for its own pane.
- * Mirrors the `{ id, glyph, title, action }` def consumed by
+ * Mirrors the `{ id, icon, glyph, title, action }` def consumed by
  * tranquil-automations/lib/pane-controls-capability.js → PaneControlsCap.register.
  */
 export interface PaneControlItem {
   /** Stable id for the control (also used as the de-dup / ordering key). */
   id: string;
-  /** The glyph rendered in the button, e.g. "⟳" "⤒" "ⓘ". */
-  glyph: string;
+  /**
+   * Preferred: a codicon name (rendered as `<span class="codicon codicon-<icon>">`
+   * from tranquil-theme-icons' global font), e.g. "refresh", "new-file". Takes
+   * precedence over `glyph`.
+   */
+  icon?: string;
+  /**
+   * Fallback: a literal Unicode glyph rendered as text, e.g. "⟳" "⤒" "ⓘ". Used
+   * only when `icon` is omitted. Provide `icon` or `glyph`.
+   */
+  glyph?: string;
   /** Accessible label / tooltip (button `title` + `aria-label`). */
   title: string;
   /** Runs in the page when the control is clicked. */
