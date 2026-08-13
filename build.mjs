@@ -16,7 +16,9 @@ await esbuild.build({
   bundle: true,
   platform: "node",
   format: "cjs",
-  external: ["atom", "electron"],
+  // bufferutil/utf-8-validate are ws's optional native accelerators — leave their requires
+  // dynamic so ws falls back to its JS implementations at runtime.
+  external: ["atom", "electron", "bufferutil", "utf-8-validate"],
   outfile: "dist/host.js",
   banner,
 });
