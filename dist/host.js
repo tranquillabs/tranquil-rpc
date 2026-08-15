@@ -6566,6 +6566,17 @@ function wsTransport(socket, { onControl } = {}) {
 var TAG = "[tranquil-rpc runner]";
 var AUTH_TIMEOUT_MS = 3e3;
 var TOKEN_TTL_MS = 6e4;
+var DEBUG_AUTH_TIMEOUT_MS = 10 * 6e4;
+var DEBUG_TOKEN_TTL_MS = 10 * 6e4;
+var pendingDebugTokens = 0;
+function currentAuthTimeoutMs() {
+  return pendingDebugTokens > 0 ? DEBUG_AUTH_TIMEOUT_MS : AUTH_TIMEOUT_MS;
+}
+function releaseDebugHold(meta) {
+  if (!meta || !meta.debug) return;
+  meta.debug = false;
+  pendingDebugTokens = Math.max(0, pendingDebugTokens - 1);
+}
 var server = null;
 var serverPort = null;
 var tokens = /* @__PURE__ */ new Map();
@@ -6581,7 +6592,7 @@ function handleConnection(socket) {
   let authed = false;
   const authTimer = setTimeout(() => {
     if (!authed) refuse(socket, "auth timeout");
-  }, AUTH_TIMEOUT_MS);
+  }, currentAuthTimeoutMs());
   const onAuthMessage = (data) => {
     if (authed) return;
     clearTimeout(authTimer);
@@ -6594,6 +6605,7 @@ function handleConnection(socket) {
     const meta = tokens.get(token);
     if (meta) {
       clearTimeout(meta.timer);
+      releaseDebugHold(meta);
       tokens.delete(token);
     }
     if (!meta) {
@@ -6647,11 +6659,19 @@ function ensureRunnerServer() {
     wss.on("connection", handleConnection);
   });
 }
-function mintRunToken({ runId, scriptPath, scriptDir }) {
+function mintRunToken({ runId, scriptPath, scriptDir, debug = false }) {
   if (!runId) throw new Error("mintRunToken: runId is required");
   const token = import_crypto.default.randomBytes(32).toString("hex");
-  const timer = setTimeout(() => tokens.delete(token), TOKEN_TTL_MS);
-  tokens.set(token, { runId, scriptPath, scriptDir, timer });
+  const meta = { runId, scriptPath, scriptDir, debug };
+  if (debug) pendingDebugTokens += 1;
+  meta.timer = setTimeout(
+    () => {
+      releaseDebugHold(meta);
+      tokens.delete(token);
+    },
+    debug ? DEBUG_TOKEN_TTL_MS : TOKEN_TTL_MS
+  );
+  tokens.set(token, meta);
   return token;
 }
 function sendCancel(runId) {
@@ -6668,6 +6688,7 @@ function endRun(runId) {
   for (const [token, meta] of tokens) {
     if (meta.runId === runId) {
       clearTimeout(meta.timer);
+      releaseDebugHold(meta);
       tokens.delete(token);
     }
   }
@@ -6681,7 +6702,10 @@ function endRun(runId) {
 }
 function closeRunnerServer() {
   for (const [runId] of sessions) endRun(runId);
-  for (const [, meta] of tokens) clearTimeout(meta.timer);
+  for (const [, meta] of tokens) {
+    clearTimeout(meta.timer);
+    releaseDebugHold(meta);
+  }
   tokens.clear();
   if (server) {
     try {
