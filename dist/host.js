@@ -6435,14 +6435,19 @@ function registerCapability(name, factory, options) {
       `registerCapability: audience for "${name}" must be a non-empty array of "webview" | "runner"`
     );
   }
-  factories.set(name, { factory, audience });
+  const requires = options && options.requires || null;
+  if (requires != null && typeof requires !== "string") {
+    throw new Error(`registerCapability: requires for "${name}" must be a string`);
+  }
+  factories.set(name, { factory, audience, requires });
 }
 function buildHostApi(ctx) {
   const kind = ctx && ctx.kind || "webview";
   const proto = Object.create(RpcTarget.prototype);
   const cache = /* @__PURE__ */ new Map();
-  for (const [name, { factory, audience }] of factories) {
+  for (const [name, { factory, audience, requires }] of factories) {
     if (!audience.includes(kind)) continue;
+    if (requires && kind === "runner" && !(ctx && ctx.grants && ctx.grants[requires])) continue;
     Object.defineProperty(proto, name, {
       configurable: true,
       enumerable: false,
@@ -6614,12 +6619,14 @@ function handleConnection(socket) {
     }
     authed = true;
     socket.off("message", onAuthMessage);
-    const { runId, scriptPath, scriptDir } = meta;
+    const { runId, scriptPath, scriptDir, grants } = meta;
     const subscriptions2 = new import_atom.CompositeDisposable();
     const transport = wsTransport(socket);
     const session = new RpcSession(
       transport,
-      buildHostApi({ kind: "runner", runId, scriptPath, scriptDir, subscriptions: subscriptions2 })
+      // `grants` decides which capabilities this session can even see (ADR-0025). It arrives
+      // with the token, so it is fixed at mint time and cannot be influenced by the child.
+      buildHostApi({ kind: "runner", runId, scriptPath, scriptDir, grants, subscriptions: subscriptions2 })
     );
     sessions.set(runId, { socket, transport, session, subscriptions: subscriptions2 });
     socket.on("close", () => {
@@ -6659,10 +6666,10 @@ function ensureRunnerServer() {
     wss.on("connection", handleConnection);
   });
 }
-function mintRunToken({ runId, scriptPath, scriptDir, debug = false }) {
+function mintRunToken({ runId, scriptPath, scriptDir, grants = null, debug = false }) {
   if (!runId) throw new Error("mintRunToken: runId is required");
   const token = import_crypto.default.randomBytes(32).toString("hex");
-  const meta = { runId, scriptPath, scriptDir, debug };
+  const meta = { runId, scriptPath, scriptDir, grants, debug };
   if (debug) pendingDebugTokens += 1;
   meta.timer = setTimeout(
     () => {
