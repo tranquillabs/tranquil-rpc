@@ -2,12 +2,17 @@
   "name": "tranquil-rpc",
   "main": "./dist/host.js",
   "types": "./types/tranquil-rpc.d.ts",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Object-capability RPC (Cap'n Web) between the host renderer and browser webview guests",
   "repository": "https://github.com/tranquillabs/tranquil-rpc",
-  "author": { "name": "Tranquil Labs", "url": "https://github.com/tranquillabs" },
+  "author": {
+    "name": "Tranquil Labs",
+    "url": "https://github.com/tranquillabs"
+  },
   "license": "MIT",
-  "engines": { "atom": ">=1.0.0 <2.0.0" },
+  "engines": {
+    "atom": ">=1.0.0 <2.0.0"
+  },
   "providedServices": {
     "tranquil-rpc": {
       "versions": {
