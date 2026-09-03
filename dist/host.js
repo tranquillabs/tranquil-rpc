@@ -6476,6 +6476,7 @@ function toRootPath(input) {
 }
 function addTrustedRoot(input) {
   const root = toRootPath(input);
+  if (root && !roots.has(root)) console.log("[tranquil-rpc]", "trusted root registered:", root);
   if (root) roots.add(root);
   return root;
 }
@@ -6501,9 +6502,6 @@ function isTrusted(url) {
     if (normalized === root || normalized.startsWith(root + import_path.default.sep)) return true;
   }
   return false;
-}
-function trustedRoots() {
-  return [...roots];
 }
 
 // lib/runner-host.js
@@ -6641,10 +6639,8 @@ function handleConnection(socket) {
         s.subscriptions.dispose();
       } catch (e) {
       }
-      console.log(TAG, "session closed:", runId);
     });
     socket.send("AUTH OK");
-    console.log(TAG, "session established:", runId, scriptPath);
   };
   socket.on("message", onAuthMessage);
   socket.on("close", () => clearTimeout(authTimer));
@@ -6726,7 +6722,6 @@ function closeRunnerServer() {
 
 // lib/host.js
 var TAG2 = "[tranquil-rpc]";
-console.log(TAG2, "host module loaded");
 var subscriptions = null;
 var guestBundleCache = null;
 function guestBundle() {
@@ -6776,7 +6771,6 @@ function manage(webview, item) {
     }
     if (!url) return;
     if (!isTrusted(url)) {
-      console.log(TAG2, "untrusted \u2014 no runtime injected:", url);
       return;
     }
     const transport = hostTransport(webview);
@@ -6838,7 +6832,6 @@ function activate() {
       }
     })
   );
-  console.log(TAG2, "activated; trusted roots:", trustedRoots());
   return subscriptions;
 }
 function deactivate() {
