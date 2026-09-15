@@ -4,10 +4,6 @@ Object-capability RPC between the Tranquil host renderer and browser `<webview>`
 [Cap'n Web](https://github.com/cloudflare/capnweb). Guests call host capabilities and pass
 callbacks that the host invokes as stubs — no hand-rolled IPC channels or id correlation.
 
-Shipped capabilities: `ping`, `notify`, `paneControls.register`. Full architecture and the
-decision record live in the `www-tranquil` dev docs: `docs/development/notes/tranquil-rpc-status`,
-`docs/development/notes/guest-host-rpc-notes`, and `docs/development/adr/0003-capnweb-rpc`.
-
 ## Trust model
 
 Two independent gates:
@@ -23,20 +19,13 @@ Two independent gates:
   unclaimed after 60s (10min for a debug run). The first frame on a connection must be exactly
   `AUTH <token>` within 3s or the socket closes.
 
-## Build
-
-```sh
-source ~/.nvm/nvm.sh && nvm use
-npm install
-npm run build     # → dist/host.js (host, CJS) + dist/tranquil-rpc-guest.js (guest, IIFE)
-```
-
-`dist/` is committed (production has no build step). Rebuild after editing `lib/`.
-
 ## API
 
 Owned consumers `require("tranquil-rpc")` (or consume the `tranquil-rpc` service, which returns the
-same functions):
+same functions). Types live in `types/` (`tranquil-rpc.d.ts` + `host-api.d.ts`); `package.json`
+`"types"` points at them.
+
+**Core** — registering and calling capabilities:
 
 - `registerCapability(name, factory(ctx))` — expose a capability. `factory` returns a function
   (called directly, `host.name(...)`) or an `RpcTarget` (a namespace, `host.name.method(...)`).
@@ -46,6 +35,9 @@ same functions):
 - `isTrusted(url)` — the classifier (default-deny).
 - `RpcTarget` — re-exported from capnweb. Consumers subclassing it for a capability namespace **must**
   get it from here (not a separate `require("capnweb")`), so `instanceof RpcTarget` holds.
+
+**Runner bridge** — used by `tranquil-automations` to talk to a Deno automation subprocess:
+
 - `ensureRunnerServer()` — lazily start (or return) the per-window runner bridge WebSocket server.
   Resolves `{ port }`.
 - `mintRunToken({ runId, scriptPath, scriptDir, grants, debug })` — mint a one-time token for a run
@@ -54,10 +46,9 @@ same functions):
 - `endRun(runId)` — run ended (exit, kill, or timeout): close its socket and invalidate any unclaimed
   token.
 
-Types for the above (consumer API) and for the guest-facing `window.tranquilHost` capability catalog
-live in `types/` (`tranquil-rpc.d.ts` + `host-api.d.ts`); `package.json` `"types"` points at them.
-
 ## Layout
+
+**Core:**
 
 - `lib/index.js` — package `main` (bundled to `dist/host.js`): lifecycle + `provideRpc` + direct API.
 - `lib/host.js` — host lifecycle; per-webview session management, trust-gated guest injection.
@@ -69,14 +60,24 @@ live in `types/` (`tranquil-rpc.d.ts` + `host-api.d.ts`); `package.json` `"types
 - `lib/channel.js` — the single IPC channel name (`"tranquil:rpc"`) both directions share.
 - `lib/queue.js` — the async message queue backing a transport's `receive()` (Cap'n Web calls it in
   a loop).
-- `lib/transport-ws.js` — the WebSocket leg of the transport for the runner bridge; works over both
-  a server-side `ws` socket (host renderer) and a standard `WebSocket` (the Deno child mirrors this
-  in `deno/transport.ts`).
-- `lib/runner-host.js` — **security-critical**, same review discipline as `trust.js`. The runner
-  bridge: WebSocket server, token table, and per-run session lifecycle for a Deno automation
-  subprocess authenticating with a one-time run token (ADR-0022).
+
+**Runner bridge:**
+
+- `lib/runner-host.js` — **security-critical**, same review discipline as `trust.js`. WebSocket
+  server, token table, and per-run session lifecycle for a Deno automation subprocess (ADR-0022).
+- `lib/transport-ws.js` — the WebSocket leg of the transport; works over both a server-side `ws`
+  socket (host renderer) and a standard `WebSocket` (the Deno child mirrors this in
+  `deno/transport.ts`).
+
+**Types:**
+
 - `types/host-api.d.ts` — guest-facing capability catalog (`window.tranquilHost`).
 - `types/tranquil-rpc.d.ts` — consumer/module API (`require("tranquil-rpc")`).
 
-The living security tracker (threat model, mitigations, open issues) lives in the `www-tranquil` dev
-docs at `docs/development/security/security-considerations`.
+## More
+
+Shipped capabilities: `ping`, `notify`, `paneControls.register`. Full architecture, the decision
+record, and the living security tracker (threat model, mitigations, open issues) live in the
+`www-tranquil` dev docs: `docs/development/notes/tranquil-rpc-status`,
+`docs/development/notes/guest-host-rpc-notes`, `docs/development/adr/0003-capnweb-rpc`, and
+`docs/development/security/security-considerations`.
