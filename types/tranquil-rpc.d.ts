@@ -12,48 +12,89 @@ declare module "tranquil-rpc" {
   export type CapabilityAudience = "webview" | "runner";
 
   /**
-   * Per-session context passed to every capability factory. For webview sessions: one per trusted
-   * webview, recreated on each (re)load. For runner sessions: one per automation run, torn down
-   * with the run's socket. `subscriptions` collects session-lifetime resources (retained action
-   * stubs, pane-control registrations) and is disposed on reload/close/run end.
+   * Session-scoped CompositeDisposable: capabilities add() session-lifetime resources here
+   * (retained action stubs, pane-control registrations), disposed on reload, close or run end.
    */
-  export interface CapabilityContext {
-    /** Which principal this session belongs to. Defaults to "webview". */
-    kind?: CapabilityAudience;
-    /** Webview sessions: the pane item model backing the webview. */
-    item?: unknown;
-    /** Webview sessions: the Electron `<webview>` element. */
-    webview?: unknown;
-    /** Webview sessions: the trusted `file://` URL currently loaded. */
-    url?: string;
-    /** Runner sessions: the run id the token was minted for. */
-    runId?: string;
-    /** Runner sessions: absolute path of the running script. */
-    scriptPath?: string;
-    /** Runner sessions: the script's directory (the run's fs sandbox root). */
-    scriptDir?: string;
-    /** Session-scoped CompositeDisposable; capabilities add() session-lifetime teardown here. */
-    subscriptions: { add(disposable: unknown): void };
+  export interface SessionSubscriptions {
+    add(disposable: { dispose(): void }): void;
   }
 
+  /** A webview session's context: one per trusted webview, recreated on each (re)load. */
+  export interface WebviewContext {
+    kind: "webview";
+    /** The pane item model backing the webview. */
+    item: unknown;
+    /** The Electron `<webview>` element. */
+    webview: unknown;
+    /** The trusted `file://` URL currently loaded. */
+    url: string;
+    subscriptions: SessionSubscriptions;
+  }
+
+  /** A runner session's context: one per automation run, torn down with the run's socket. */
+  export interface RunnerContext {
+    kind: "runner";
+    /** The run id the token was minted for. */
+    runId: string;
+    /** Absolute path of the running script. */
+    scriptPath: string;
+    /** The script's directory (the run's fs sandbox root). */
+    scriptDir: string;
+    /** The run's grants, from its permission header; `requires` is checked against them. */
+    grants: Readonly<Record<string, unknown>>;
+    subscriptions: SessionSubscriptions;
+  }
+
+  /** Per-session context passed to every capability factory, by the session's principal kind. */
+  export type CapabilityContext = WebviewContext | RunnerContext;
+
   /**
-   * A capability factory. Return a bare FUNCTION for a directly-callable capability
-   * (`host.name(…)`), or an `RpcTarget` for a namespace (`host.name.method(…)`). Built lazily
-   * once per session and torn down with it.
+   * What a factory returns: a bare FUNCTION for a directly-callable capability (`host.name(…)`),
+   * or an `RpcTarget` for a namespace (`host.name.method(…)`). Built lazily once per session and
+   * torn down with it.
    */
-  export type CapabilityFactory = (
-    ctx: CapabilityContext
-  ) => ((...args: any[]) => any) | CapnwebRpcTarget;
+  export type Capability = ((...args: never[]) => unknown) | CapnwebRpcTarget;
+
+  /** A capability factory for either kind of session. */
+  export type CapabilityFactory = (ctx: CapabilityContext) => Capability;
+
+  /** A capability only runs see. `requires` names a grant the run must hold for it to exist. */
+  export interface RunnerCapabilityOptions {
+    audience: ["runner"];
+    requires?: string;
+  }
+
+  /** A capability only trusted webviews see: the default. */
+  export interface WebviewCapabilityOptions {
+    audience?: ["webview"];
+  }
+
+  /** A capability both kinds of session see. `requires` applies to runs only. */
+  export interface SharedCapabilityOptions {
+    audience: CapabilityAudience[];
+    requires?: string;
+  }
 
   /**
    * Register a host capability by name. Must run before a session of the target audience
    * connects. `options.audience` controls which principals see the capability; it defaults to
-   * `["webview"]`, so runner exposure is always opt-in.
+   * `["webview"]`, so runner exposure is always opt-in. The factory gets the context of the
+   * sessions that can see it.
    */
   export function registerCapability(
     name: string,
+    factory: (ctx: RunnerContext) => Capability,
+    options: RunnerCapabilityOptions
+  ): void;
+  export function registerCapability(
+    name: string,
+    factory: (ctx: WebviewContext) => Capability,
+    options?: WebviewCapabilityOptions
+  ): void;
+  export function registerCapability(
+    name: string,
     factory: CapabilityFactory,
-    options?: { audience?: CapabilityAudience[] }
+    options: SharedCapabilityOptions
   ): void;
 
   /**
@@ -87,6 +128,10 @@ declare module "tranquil-rpc" {
     runId: string;
     scriptPath?: string;
     scriptDir?: string;
+    /** The run's grants; a runner-only capability with `requires` exists only when they hold it. */
+    grants?: Readonly<Record<string, unknown>> | null;
+    /** A debug run: the auth and time-to-live windows are widened while a breakpoint holds it. */
+    debug?: boolean;
   }): string;
 
   /** Send the protocol-level "CANCEL" frame on a run's socket. False if no live session. */
